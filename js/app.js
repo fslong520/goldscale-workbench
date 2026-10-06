@@ -1,7 +1,20 @@
 /* 应用外壳：路由、顶栏行情、轮询、插件层动态加载 */
 
 // 路由表：内置页在前；plugins/index.json 登记的插件页在启动时追加到尾部
-const PAGES = [PageWatch, PageSignal, PagePositions, PageReview, PageStrategy, PageRisk, PageSettings];
+const PAGES = [PageWatch, PageSignal, PagePositions, PageReview, PageStrategy, PageRisk, PagePlugins, PageSettings];
+
+/* 导航结构：只列 7 个内置能力页 + 「插件」入口。插件页（总览、各类插件）一律不单列，
+ * 在 PAGES 里可路由、在插件中心里可管理；高亮时全归「插件」这一项（一 nav 项映射多 key）。 */
+const NAV_SPEC = [
+  { key: 'watch', label: '行情' },
+  { key: 'signal', label: '信号' },
+  { key: 'positions', label: '持仓' },
+  { key: 'review', label: '复盘' },
+  { key: 'strategy', label: '策略' },
+  { key: 'risk', label: '风控' },
+  { key: 'plugins', label: '插件' },   // 插件中心：内置页（key='plugins'）
+  { key: 'settings', label: '设置' }
+];
 
 /* 插件层取文件：带超时，失败由调用方处理（本地静态目录，正常为毫秒级） */
 async function fetchPluginURL(url, kind) {
@@ -58,15 +71,18 @@ const App = {
 
   async boot() {
     window.__gsPluginErrors = window.__gsPluginErrors || {};
-    // 导航
-    const nav = document.getElementById('nav');
-    U.clear(nav);
-    for (const p of PAGES) {
-      nav.appendChild(U.el('div', {
-        class: 'nav-item', text: p.title,
-        onclick: () => this.go(p.key)
-      }));
+
+    // 品牌区 → 总览首页（总览是插件页，缺失时 go() 自动退回「行情」）
+    const brand = document.querySelector('.brand');
+    if (brand) {
+      brand.style.cursor = 'pointer';
+      brand.title = '总览首页';
+      brand.addEventListener('click', () => this.go('overview'));
     }
+
+    // 导航：内置 8 项（含「插件」入口）；插件页在 loadPlugins 里并入「插件」项的 keys
+    this.navItems = NAV_SPEC.map((n) => ({ key: n.key, label: n.label, keys: [n.key] }));
+    this.renderNav();
 
     // 插件层：登记在 plugins/index.json 的页面在此挂载。
     // 插件层是外挂层——注册表/清单/脚本任何异常都只跳过该插件，绝不阻塞启动、不动内置页。
@@ -142,17 +158,32 @@ const App = {
     }
     if (!ok.length) return;
 
-    // order 决定插件之间的先后；插件一律排在内置页之后，nav 项顺序须与 PAGES 一一对应
+    // order 决定插件之间的先后；插件只入路由表与「插件」导航项的归属，不单列 nav
     ok.sort((a, b) => a.order - b.order);
-    const nav = document.getElementById('nav');
+    const group = this.navItems.find((n) => n.key === 'plugins');
     for (const page of ok) {
       PAGES.push(page);
-      nav.appendChild(U.el('div', {
-        class: 'nav-item', text: page.title,
-        onclick: () => this.go(page.key)
-      }));
+      group?.keys.push(page.key);
     }
     console.log('[plugins] 已加载 ' + ok.length + ' 个：' + ok.map((p) => p.key).join(', '));
+  },
+
+  /** 画导航：内置 8 项，key 与 this.navItems 的下标一一对应（go() 高亮靠这个对齐） */
+  renderNav() {
+    const nav = document.getElementById('nav');
+    U.clear(nav);
+    for (const item of this.navItems) {
+      nav.appendChild(U.el('div', {
+        class: 'nav-item', text: item.label,
+        onclick: () => this.go(item.key)
+      }));
+    }
+  },
+
+  /** 页面 → 导航项：内置按 key 一对一，「插件」项收全部插件页（一对多） */
+  navItemFor(page) {
+    if (!page) return null;
+    return (this.navItems || []).find((n) => n.keys.includes(page.key)) || null;
   },
 
   async loadPlugin(item, appVer) {
@@ -281,9 +312,11 @@ const App = {
       this.current.destroy?.();
     }
 
-    // 高亮导航
-    U.$$('.nav-item').forEach((n, i) => {
-      n.classList.toggle('active', PAGES[i] === page);
+    // 高亮导航：「插件」项对插件页是一对多归属（内置 7 项仍一对一）
+    const item = this.navItemFor(page);
+    const nav = document.getElementById('nav');
+    Array.from(nav.children).forEach((n, i) => {
+      n.classList.toggle('active', this.navItems[i] === item);
     });
 
     const view = U.clear(document.getElementById('view'));

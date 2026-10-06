@@ -810,3 +810,42 @@ table.grid tbody tr.attr-row:hover td { background: var(--bg-2); }      /* 详�
 .chip.warn { color: var(--warn); border-color: rgba(240, 160, 32, .45); }
 .pl-err { margin: 2px 0 0; }
 .pl-file { display: none; }
+
+/* ---------- 插件中心：网格卡片 ---------- */
+.pg-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px; align-items: stretch;
+}
+.pg-card { margin: 0; display: flex; flex-direction: column; transition: border-color .15s; }
+.pg-card:hover { border-color: var(--line-2); }
+.pg-card .card-body { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.pg-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pg-desc { flex: 1 1 auto; font-size: 12px; line-height: 1.65; color: var(--fg-2); }
+.pg-card-acts {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: auto; padding-top: 9px; border-top: 1px solid var(--line);
+}
+.pg-card-acts .btn { padding: 2px 10px; font-size: 11px; }
+.pg-card-acts .pl-sw { margin-right: 2px; }
+.pg-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 9px 0; }
+.pg-note { max-width: 980px; }
+
+/* ---------- 记忆只读弹层 ---------- */
+.mem-modal {
+  width: min(820px, 94vw); height: min(80vh, 760px);
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, .55);
+}
+.mem-list { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; }
+.mem-item {
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; margin-bottom: 8px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.mem-item:hover { border-color: var(--line-2); background: var(--bg-3); }
+.mem-body {
+  white-space: pre-wrap; margin-top: 6px; font-size: 12px; line-height: 1.75;
+  color: var(--fg-2); border-top: 1px dashed var(--line); padding-top: 6px;
+}
