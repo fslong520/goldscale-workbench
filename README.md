@@ -68,18 +68,27 @@ bash start-all.sh   # 自动带起 agentd，日志 agentd.log
 
 ### 功能 = 插件
 
-前端插件是目录，**agent 新建一个目录 = 产品多一个页面，无需重编译**：
+前端插件是目录，**新建一个目录 = 产品多一个页面，无需重编译、无需改核心代码**：
 
 ```
 plugins/
-├── index.json               # 静态注册表（浏览器不能列目录）
+├── index.json               # 静态注册表（浏览器不能列目录，后端也不扫 plugins/）
 └── <name>/
-    ├── manifest.json        # {"name","title","order","desc"}
-    └── index.js             # window.Pages.<name> = {key,title,render(view),destroy}
+    ├── manifest.json        # {"name","title","order","desc"}；version/author/min_app/homepage
+    │                        # 供设置页插件管理器读取（字段表见开发手册）
+    └── index.js             # window.Pages['<name>'] = {key,title,render(view),destroy}
 ```
 
 启动时 app.js 按注册表逐个加载，**单个插件出错只 console.warn 并跳过，绝不拖死内置页**
-（故障隔离已实测）。内置示例：`plugins/hello`（活模板）、`plugins/gold-glance`（AI 对话生成）。
+（故障隔离已实测）。官方插件即活案例：`hello`（最小骨架活模板）、`gold-glance`（单接口消费）、
+`overview`（多接口聚合的驾驶舱首页）、`behavior-review`（记忆 + AI 行为周报）。
+
+**插件生态全开放**：mod 式开发（复制目录即起步）、`.gsp` 单文件分享；不需要闭源 AI 核心，
+插件机制本身完全开源。
+
+开发教程：[docs/plugin-development.md](docs/plugin-development.md) ·
+插件目录：[docs/plugins.md](docs/plugins.md) ·
+贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
