@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>金秤 · 贵金属交易工作台</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">金秤</span>
+      <span class="badge">本地模拟盘</span>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="quote-strip" id="quoteStrip"></div>
+    <button class="btn sm ask-ai-btn" id="askAiBtn" title="随时问 AI（F2）">询问 AI</button>
+  </header>
+
+  <main id="view" class="view"></main>
+  <div id="toastHost" class="toast-host"></div>
+</div>
+
+<script src="vendor/lwc.js"></script>
+<script src="vendor/echarts.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/pages/watch.js"></script>
+<script src="js/pages/signal.js"></script>
+<script src="js/aichat.js"></script>
+<script src="js/pages/positions.js"></script>
+<script src="js/pages/review.js"></script>
+<script src="js/pages/strategy.js"></script>
+<script src="js/pages/research.js"></script>
+<script src="js/pages/risk.js"></script>
+<script src="js/pages/settings.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

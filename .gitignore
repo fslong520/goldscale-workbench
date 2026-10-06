@@ -1,0 +1,22 @@
+# 构建产物与二进制
+/target/
+/goldscale
+/goldscale-agentd
+*.log
+nohup.out
+
+# 用户数据（密钥/账本/记忆——绝不可入库）
+/data/
+/.memobak/
+
+# 本地验收与临时
+/verify/
+node_modules/
+__pycache__/
+
+# 个人环境链（指向家目录，不入库）
+/AGENTS.md
+
+# pi 的依赖树（package.json 声明入库即可）
+/agent/pi/node_modules/
+/artifacts/
