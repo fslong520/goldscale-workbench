@@ -1,31 +1,53 @@
 # 金秤 · 贵金属交易工作台
 
-以 **pi agent 为核心**的本地贵金属行情分析与模拟交易平台：各种功能（行情、回测、信号、模拟盘、记忆……）都是围绕 agent 建设的能力层与插件。
+本地贵金属行情分析与模拟交易平台（开源外围）：行情、回测、信号、模拟盘、风控、插件机制、
+respire 记忆插件——**全部开源**；产品灵魂 **AI agent 核心（agentd）为闭源二进制**，见 Release。
 
-- 两个本地进程：`goldscale`（8787，产品主服务）+ `goldscale-agentd`（8788，agent 托管）
-- **agent 不随产品崩**：主服务崩溃时 agentd 继续运行，并在 30 秒内自动拉起主服务
-- **对话改产品**：在 AI 对话里说「给本产品加/改……」，agent 会自己读规则、改插件、自检、上线
+- 纯开源即可用：K 线、画线、回测与参数优化、信号、模拟盘、风控、插件——不依赖闭源件
+- 安装闭源 AI 核心后追加：AI 对话（pi agent，可对话改产品）、行为教练、记忆智能判重、
+  研判连续剧、到价/事件联动——核心崩溃不影响产品主服务，还能自动拉起它
 - 不连券商、不下真实委托、不上传数据；只监听 `127.0.0.1`
 
 > 协议：**PolyForm Noncommercial 1.0.0**（见 LICENSE）——个人研究、学习、兴趣使用免费，商业用途需另行授权。
-> 本工具用于行情分析与模拟交易演练，**不构成投资建议**。
+> AI 核心二进制另附单独许可（见 Release 说明）。本工具**不构成投资建议**。
 
 ---
 
 ## 快速开始
 
 ```bash
-# 构建（需 Rust 1.75+）
+# 构建（需 Rust 1.75+）——开源部分独立可构建
 cargo build --release
-cp target/release/goldscale target/release/goldscale-agentd .
+cp target/release/goldscale .
 
-# 双进程启动（各写 goldscale.log / agentd.log）
+# 启动（自动检测：装了闭源 AI 核心就双进程，没装就只起产品）
 bash start-all.sh
 ```
 
-浏览器打开 `http://127.0.0.1:8787`。AI 对话走 8788（agentd），由页面自动访问。
+浏览器打开 `http://127.0.0.1:8787`。**没装 AI 核心时**：行情/回测/信号/模拟盘全部照常，
+AI 对话与教练入口会提示不可用；到 [Releases](../../releases) 下载 `goldscale-agentd`
+解压到本目录，再跑一次 `start-all.sh` 即获完整 AI 能力。
 
-单进程调试：`./goldscale`（仅产品，无 AI）；`PORT=9000 ./goldscale` 改端口。
+---
+
+## 闭源 AI 核心（goldscale-agentd）
+
+产品与 agent 分离的"灵魂层"，以**闭源二进制**分发（[Release 下载](../../releases)）：
+
+| 能力 | 说明 |
+|---|---|
+| agent 托管 | 每会话常驻 pi agent；Origin 白名单闸门（仅本机页面） |
+| 自愈监督 | 每 10 秒探产品健康，连挂 3 次自动拉起——agent 不随产品崩 |
+| 对话改产品 | 对话里说「加/改某功能」，agent 自己改插件、自检、上线（git 可回退） |
+| 记忆网关 | 记忆读写收口：写必先判重，高相似起 agent 裁决改/并/挂 |
+| 能力任务口 | `/api/agent/task`：回测解读、优化建议、亏损归因、研究总结、周报 |
+| 行为教练 | 产品事件（亏损/连赢/到价）→ 2 秒内生成人话教练动态 |
+| 产品工具 | pi extension：对话直接读行情/持仓/策略 |
+
+```bash
+# 安装（解压到项目根后）
+bash start-all.sh   # 自动带起 agentd，日志 agentd.log
+```
 
 ---
 
@@ -33,16 +55,16 @@ bash start-all.sh
 
 ```
 浏览器 (127.0.0.1:8787 静态页)
- ├── 产品主服务 goldscale ──── 行情/回测/信号/模拟盘/风控/记忆插件
- │        ▲ 崩溃时由 agentd 自动拉起（10s 探活 ×3 → 杀旧进程 → nohup 起）
- └── AI 对话 ──► goldscale-agentd (127.0.0.1:8788)
-                   ├── pi 会话托管（每会话常驻 pi --mode rpc）
-                   ├── Origin 白名单闸门（仅本机页面可调，绝无 CORS *）
-                   ├── 记忆：委托本机 respire/rsrs（--client-only，同一套记忆库）
-                   └── 自愈监督循环（只监督金秤，绝不重启自己）
+ ├── goldscale（开源）── 行情/回测/信号/模拟盘/风控/记忆插件/前端插件机制
+ │        ▲ 崩溃时由 agentd 自动拉起（10s 探活 ×3 → 杀旧 → nohup 起）
+ └── AI 对话/教练 ──► goldscale-agentd（闭源，8788，Release 分发）
+                       ├── pi 会话托管 · Origin 闸门 · 自愈监督
+                       ├── 记忆网关（读写经 agent，判重裁决）
+                       └── 能力任务口 /api/agent/task
 ```
 
-**故障域分离**：其它功能视为插件，可以炸；agent 独立于产品，负责诊断与拉起。
+**故障域分离**：外围功能是插件，可以炸；AI 核心独立，负责诊断与拉起。
+没有 AI 核心，外围照常运转——这就是"开源外围 + 闭源核心"的边界。
 
 ### 功能 = 插件
 
@@ -105,7 +127,7 @@ plugins/
 | 能力 | 说明 |
 |---|---|
 | 结构化研判 | 读多周期行情 → 单轴仪表盘（0-100，越高越看多）+ 四模块 + 多空两套点位 + 风控裁决 + 思考过程；AI 定方向，**代码管风控**（手数/盈亏比/点差/日单数/时段一律代码说了算） |
-| Agent 对话 | pi agent（每会话常驻），可 bash、读写文件、调本机 API；按 `AGENTS.override.md` 的开发者工作流直接改产品 |
+| Agent 对话 | pi agent（每会话常驻），可 bash、读写文件、调本机 API 与产品工具；开发者工作流由闭源核心随二进制播种 |
 | 记忆 | 与 agent 共用同一套本机 respire 库（树形、判重、云同步可选）；设置页一键开启，未开启不注入 |
 | 上下文预算 | 2 万 / 10 万 / 40 万 / 90 万四档，回答末尾显示实际 token |
 
@@ -138,7 +160,7 @@ plugins/
 ## 项目结构
 
 ```
-├── start-all.sh            双进程启动（goldscale + goldscale-agentd）
+├── start-all.sh            启动（检测到闭源 AI 核心则双进程，否则只起产品）
 ├── index.html / css/ / js/  静态前端（无构建，改完刷新即生效）
 │   ├── core.js              API 封装、U 工具、U.md 投资向 Markdown 渲染
 │   ├── app.js               路由 + 插件动态加载
@@ -146,9 +168,7 @@ plugins/
 │   └── pages/               内置页面
 ├── plugins/                 功能插件（index.json 注册表 + 目录即页面）
 ├── src/
-│   ├── main.rs              产品主服务（8787）
-│   ├── bin/agentd.rs        agent 服务（8788：会话托管 + Origin 闸门 + 自愈监督）
-│   ├── pihost.rs            pi 进程会话管理
+│   ├── main.rs              产品主服务（8787；AI 核心经 8788 对接，闭源另发）
 │   ├── data.rs              行情接入、缓存、断更检测、合成根
 │   ├── strategy.rs / cond.rs  五步判定 + 条件引擎
 │   ├── backtest.rs          回测与参数优化
@@ -156,8 +176,7 @@ plugins/
 │   ├── enhance.rs           AI 结构化研判
 │   ├── rsbridge.rs          respire 记忆桥（--client-only）
 │   └── …                    config/indicators/ai/agent 等
-├── agent/pi/                pi 安装（npm 局部安装，node_modules 不入库）
-├── AGENTS.override.md       agent 身份与改产品工作流（pi 启动即读）
+├── agent/pi/                pi 安装声明（npm 局部安装，node_modules 不入库）
 └── LICENSE                  PolyForm Noncommercial 1.0.0
 ```
 

@@ -32,15 +32,20 @@ sync_bin() {
 }
 
 sync_bin goldscale
-sync_bin goldscale-agentd
+# 闭源可选核心：存在才同步与启动（下载自 Release，见 README）
+HAVE_AGENTD=0
+if [ -f "$DIR/goldscale-agentd" ]; then
+  HAVE_AGENTD=1
+  sync_bin goldscale-agentd
+fi
 
 if [ ! -x "$DIR/goldscale" ]; then
   echo "未找到可执行文件 goldscale，请先： cargo build --release"
   exit 1
 fi
-if [ ! -x "$DIR/goldscale-agentd" ]; then
-  echo "未找到可执行文件 goldscale-agentd，请先： cargo build --release"
-  exit 1
+if [ "$HAVE_AGENTD" -eq 0 ]; then
+  echo "提示：未安装闭源 AI 核心 goldscale-agentd——行情/回测/模拟盘照常，AI 对话与教练不可用"
+  echo "      下载：https://github.com/fslong520/goldscale/releases（解压到本目录）"
 fi
 
 # 1) 金秤主服务（端口被占则跳过，绝不擅杀别人的进程）
