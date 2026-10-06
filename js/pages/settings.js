@@ -316,6 +316,212 @@ const keyTip = U.el('div', { class: 'note', style: 'margin-bottom:10px' },
     };
 
     page.appendChild(U.card('记忆插件 · respire', memHost));
+
+    // ---- 插件管理 · 文件夹即安装（启停 / .gsp 导入导出 / 覆盖升级 / 删除）----
+    // 插件 = plugins/<name>/（manifest.json + index.js）+ index.json 一行登记；后端读写，这里只发指令。
+    const plHost = U.el('div', {});
+    const plList = U.el('div', {});
+    const plNote = U.el('div', { class: 'note pl-note', style: 'margin:8px 0 0' });
+    const plState = { items: [] };
+
+    /** 内联 API 绑定：core.js 只读不改，插件管理接口写在这里 */
+    const plApi = {
+      manage: () => API.req('/api/plugins/manage'),
+      install: (gsp) => API.req('/api/plugins/install', { method: 'POST', body: { gsp } }),
+      exportOne: (name) => API.req(`/api/plugins/export?name=${encodeURIComponent(name)}`),
+      toggle: (name, enabled) =>
+        API.req('/api/plugins/toggle', { method: 'POST', body: { name, enabled } }),
+      remove: (name) => API.req('/api/plugins/remove', { method: 'POST', body: { name } })
+    };
+
+    let plAppVer = String(window.__gsAppVersion || '');
+    const plEnsureVer = async () => {
+      if (!plAppVer) {
+        try {
+          const h = await API.health();
+          plAppVer = String((h && h.version) || '');
+          window.__gsAppVersion = plAppVer;
+        } catch (e) { plAppVer = ''; }   // 拿不到版本就不做 min_app 判定
+      }
+      return plAppVer;
+    };
+    const verCmp = (typeof cmpVersion === 'function') ? cmpVersion : () => 0;
+
+    const plRender = () => {
+      U.clear(plList);
+      const items = plState.items;
+      if (!items.length) {
+        plList.appendChild(U.el('div', { class: 'note' },
+          '还没有装插件。点上方「导入 .gsp」装上第一个，或照 docs/plugins.md 手写一个目录' +
+          '（建 plugins/<name>/ 两个文件 + 在 plugins/index.json 登记一行）。'));
+        return;
+      }
+      for (const it of items) {
+        const errs = (window.__gsPluginErrors || {})[it.name];
+        const broken = !!errs || !!it.has_error;
+        const need = String(it.min_app || '');
+        const badVer = !!need && !!plAppVer && verCmp(plAppVer, need) < 0;
+
+        const chips = U.el('div', { class: 'pl-row-chips' });
+        if (broken) {
+          const c = U.el('button', { class: 'chip bad', text: '加载失败', title: '点开看原因' });
+          c.addEventListener('click', () => {
+            errsBox.style.display = errsBox.style.display === 'none' ? 'block' : 'none';
+          });
+          chips.appendChild(c);
+        } else if (!it.enabled) {
+          chips.appendChild(U.el('span', { class: 'chip', style: 'color:var(--fg-3)', text: '已停用' }));
+        } else {
+          chips.appendChild(U.el('span', { class: 'chip', style: 'color:var(--gold)', text: '启用中' }));
+        }
+        if (badVer) {
+          chips.appendChild(U.el('span', {
+            class: 'chip warn', title: `插件要求金秤 v${need}，本机 v${plAppVer}`, text: '需 v' + need
+          }));
+        }
+
+        const why = errs
+          ? `${errs.stage}：${errs.message}`
+          : '插件目录缺失或缺 index.js';
+        const errsBox = U.el('div', {
+          class: 'note err pl-err', style: 'display:none;flex-basis:100%', text: broken ? why : ''
+        });
+
+        const sw = U.el('button', {
+          class: 'pl-sw' + (it.enabled ? ' on' : ''),
+          title: it.enabled ? '点击停用' : '点击启用'
+        }, U.el('span', { class: 'pl-knob' }));
+        sw.addEventListener('click', async () => {
+          const next = !it.enabled;
+          sw.disabled = true;
+          try {
+            await plApi.toggle(it.name, next);
+            it.enabled = next;
+            U.toast(next ? '已启用 · 硬刷新（Ctrl+Shift+R）后生效'
+                        : '已停用 · 硬刷新（Ctrl+Shift+R）后该页不再加载', 'ok');
+            plRender();
+          } catch (e) { U.toast('切换失败：' + e.message, 'err'); }
+          finally { sw.disabled = false; }
+        });
+
+        const expBtn = U.el('button', { class: 'btn', style: 'padding:2px 10px;font-size:11px', text: '导出' });
+        expBtn.addEventListener('click', async () => {
+          expBtn.disabled = true;
+          try {
+            const r = await plApi.exportOne(it.name);
+            const gsp = (r && r.gsp) ? r.gsp : r;
+            const v = String(it.version || '0').replace(/[^a-zA-Z0-9._-]/g, '_');
+            const fname = `${it.name}-v${v}.gsp`;
+            const url = URL.createObjectURL(new Blob([JSON.stringify(gsp, null, 2)], { type: 'application/json' }));
+            const a = U.el('a', { href: url, download: fname });
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            U.toast('已导出 ' + fname, 'ok');
+          } catch (e) { U.toast('导出失败：' + e.message, 'err'); }
+          finally { expBtn.disabled = false; }
+        });
+
+        const delBtn = U.el('button', {
+          class: 'btn', style: 'padding:2px 10px;font-size:11px;color:var(--down)', text: '删除'
+        });
+        delBtn.addEventListener('click', async () => {
+          if (!confirm(`删除插件「${it.title}」？\n将删除插件目录 plugins/${it.name}/，不可恢复。`)) return;
+          delBtn.disabled = true;
+          try {
+            await plApi.remove(it.name);
+            U.toast('已删除 ' + it.name + ' · 硬刷新后生效', 'ok');
+            load();
+          } catch (e) { U.toast('删除失败：' + e.message, 'err'); }
+          finally { delBtn.disabled = false; }
+        });
+
+        plList.appendChild(U.el('div', { class: 'pl-row' },
+          U.el('div', { class: 'pl-row-main' },
+            U.el('div', { class: 'pl-row-title' },
+              U.el('span', { style: 'font-weight:600', text: it.title }),
+              U.el('span', { class: 'pl-sub mono', text: `${it.name} v${it.version || '—'}` }),
+              U.el('span', { class: 'pl-sub', text: '· ' + (it.author || '—') })),
+            chips),
+          U.el('div', { class: 'pl-row-acts' }, sw, expBtn, delBtn),
+          errsBox));
+      }
+    };
+
+    const load = async () => {
+      U.clear(plList);
+      plList.appendChild(U.el('div', { class: 'note', text: '读取插件清单…' }));
+      try {
+        await plEnsureVer();
+        const data = await plApi.manage();
+        plState.items = (data && data.items) || [];
+        plRender();
+      } catch (e) {
+        U.clear(plList);
+        plList.appendChild(U.el('div', { class: 'note err', text: '插件清单读取失败：' + e.message }));
+        const retry = U.el('button', { class: 'btn', text: '重试' });
+        retry.addEventListener('click', () => load());
+        plList.appendChild(U.el('div', { class: 'btns', style: 'margin-top:8px' }, retry));
+      }
+    };
+
+    const plFile = U.el('input', { type: 'file', accept: '.gsp,application/json', class: 'pl-file' });
+    const plImp = U.el('button', { class: 'btn gold', text: '导入 .gsp' });
+    plImp.addEventListener('click', () => plFile.click());
+    plFile.addEventListener('change', async () => {
+      const f = plFile.files && plFile.files[0];
+      plFile.value = '';
+      if (!f) return;
+      plNote.className = 'note pl-note';
+      plNote.textContent = '正在导入 ' + f.name + '…';
+      let gsp = null;
+      try {
+        gsp = JSON.parse(await f.text());
+      } catch (e) {
+        plNote.className = 'note pl-note err';
+        plNote.textContent = '导入失败：不是合法的 .gsp（JSON 解析错误）——' + e.message;
+        return;
+      }
+      if (!gsp || gsp.format !== 'gsp1') {
+        plNote.className = 'note pl-note err';
+        plNote.textContent = '导入失败：不是金秤插件包（format 须为 gsp1，实际 ' +
+          JSON.stringify(gsp && gsp.format) + '）';
+        return;
+      }
+      const man = (gsp.plugin && gsp.plugin.manifest) || {};
+      const old = plState.items.find((x) => x.name === String(man.name || ''));
+      if (old) {
+        const nv = man.version ? 'v' + man.version : 'v—';
+        if (!confirm(`插件「${old.title}」已存在（v${old.version || '—'} → ${nv}），继续将覆盖升级？\n` +
+            `旧目录会先备份为 plugins/${old.name}.bak-<时间戳>，升级失败可回退。`)) {
+          plNote.textContent = '';
+          return;
+        }
+      }
+      try {
+        const r = await plApi.install(gsp);
+        plNote.className = 'note pl-note ok';
+        plNote.textContent = `已${r.upgraded ? '覆盖升级' : '安装'}插件 ${r.installed} · ` +
+          '硬刷新（Ctrl+Shift+R）后出现在导航尾部（停用的插件不会被加载）。';
+        U.toast(`已${r.upgraded ? '升级' : '安装'} ${r.installed}`, 'ok');
+        load();
+      } catch (e) {
+        plNote.className = 'note pl-note err';
+        plNote.textContent = '安装失败：' + e.message;
+      }
+    });
+
+    plHost.appendChild(U.el('div', { class: 'note', style: 'max-width:660px' },
+      '文件夹即安装：一个插件就是 plugins/<name>/ 两个文件（manifest.json + index.js）加 ' +
+      'index.json 一行登记，无需重编译。这里管启停开关、.gsp 包导入导出、覆盖升级（先备份旧目录）与删除；' +
+      '启停/升级/删除都硬刷新（Ctrl+Shift+R）后生效。插件目录与包格式说明见 docs/plugins.md。'));
+    plHost.appendChild(U.el('div', { class: 'btns', style: 'margin:9px 0' }, plImp, plFile));
+    plHost.appendChild(plList);
+    plHost.appendChild(plNote);
+    load();
+
+    page.appendChild(U.card('插件管理 · plugins/', plHost));
     // 状态以服务端为准（settings.memory_enabled + rsrs 检测）；关闭后刷新页面即回未开启态
     (async () => {
       U.clear(memHost);

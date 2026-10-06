@@ -776,3 +776,37 @@ table.grid tbody tr.attr-row:hover td { background: var(--bg-2); }      /* 详�
 .btn.cd-go:hover:not(:disabled) { background: rgba(239, 83, 80, .13); }
 /* 键盘可达：焦点环与按钮边框分开，默认焦点落在「缓一缓」上 */
 .cooldown-modal .btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- 插件管理卡（设置页 · 文件夹即安装）---------- */
+.pl-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 11px; margin-bottom: 8px;
+}
+.pl-row-main { flex: 1 1 240px; min-width: 200px; display: flex; flex-direction: column; gap: 5px; }
+.pl-row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pl-sub { font-size: 11px; color: var(--fg-3); }
+.pl-row-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pl-row-acts { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* 启停开关：小圆轨，开=金 */
+.pl-sw {
+  position: relative; flex: none; width: 38px; height: 20px; padding: 0;
+  border: 1px solid var(--line-2); border-radius: 10px;
+  background: var(--bg-3); cursor: pointer; transition: background .15s, border-color .15s;
+}
+.pl-sw.on { background: var(--gold); border-color: var(--gold); }
+.pl-knob {
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--fg-2); transition: left .15s, background .15s;
+}
+.pl-sw.on .pl-knob { left: 20px; background: var(--bg); }
+.pl-sw:disabled { opacity: .5; cursor: default; }
+.pl-sw:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* 状态 chip：红=加载失败（可点开原因），橙=版本不兼容 */
+.chip.bad { color: var(--down); border-color: rgba(239, 83, 80, .5); cursor: pointer; }
+.chip.bad:hover { background: rgba(239, 83, 80, .13); }
+.chip.warn { color: var(--warn); border-color: rgba(240, 160, 32, .45); }
+.pl-err { margin: 2px 0 0; }
+.pl-file { display: none; }

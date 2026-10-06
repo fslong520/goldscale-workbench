@@ -12,6 +12,7 @@ mod config;
 mod data;
 mod enhance;
 mod indicators;
+mod plugin_store;
 mod portfolio;
 mod risk;
 mod rsbridge;
@@ -192,6 +193,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/memory/plugin/disable", post(memory_plugin_disable))
         .route("/api/memory/:id", axum::routing::delete(delete_memory))
         .route("/api/ai/check", post(ai_check))
+        // 插件管理（文件夹即安装的 mod 式插件：.gsp 导入导出 / 启停 / 覆盖升级）
+        .route("/api/plugins/manage", get(plugins_manage))
+        .route("/api/plugins/install", post(plugins_install))
+        .route("/api/plugins/export", get(plugins_export))
+        .route("/api/plugins/toggle", post(plugins_toggle))
+        .route("/api/plugins/remove", post(plugins_remove))
         .layer(TraceLayer::new_for_http())
         .fallback_service(
             ServeDir::new(&static_dir).append_index_html_on_directories(true),
@@ -1752,4 +1759,73 @@ fn opt(v: &Option<f64>) -> String {
         Some(x) => format!("{:.4}", x),
         None => "--".into(),
     }
+}
+
+// ---------- 插件管理（文件夹即安装）----------
+//
+// 插件一直是「plugins/<name>/ 两个文件 + plugins/index.json 登记」，登记靠手写；
+// 这一段把登记/停用/升级/删除/导入导出做成接口，逻辑全在 plugin_store.rs（带单测）。
+// 文件 IO 一律丢 blocking 线程，别堵 tokio worker。
+
+async fn plugin_fs<T, F>(f: F) -> Json<Api<T>>
+where
+    T: Serialize + Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    match tokio::task::spawn_blocking(f).await {
+        Ok(Ok(v)) => Json(Api::good(v)),
+        Ok(Err(e)) => Json(Api::bad(e)),
+        Err(e) => Json(Api::bad(format!("插件任务失败: {e}"))),
+    }
+}
+
+/// 清单：注册表登记行 × 磁盘 manifest 合并（带 index.json 真值）
+async fn plugins_manage() -> Json<Api<plugin_store::ManageView>> {
+    plugin_fs(|| Ok(plugin_store::manage(&plugin_store::plugins_dir()))).await
+}
+
+#[derive(Deserialize)]
+struct GspReq {
+    gsp: serde_json::Value,
+}
+
+/// 安装 .gsp{format,plugin{manifest,files}}：校验 → 备份 → 落盘 → 登记
+async fn plugins_install(Json(r): Json<GspReq>) -> Json<Api<plugin_store::InstallOutcome>> {
+    plugin_fs(move || plugin_store::install(&plugin_store::plugins_dir(), &r.gsp)).await
+}
+
+#[derive(Deserialize)]
+struct PluginNameQ {
+    #[serde(default)]
+    name: String,
+}
+
+/// 导出：读 plugins/<name>/ 拼回 .gsp 包（响应 data 为 {gsp:{…}}）
+async fn plugins_export(Query(q): Query<PluginNameQ>) -> Json<Api<serde_json::Value>> {
+    plugin_fs(move || {
+        plugin_store::export(&plugin_store::plugins_dir(), &q.name)
+            .map(|gsp| serde_json::json!({ "gsp": gsp }))
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct PluginToggleReq {
+    name: String,
+    enabled: bool,
+}
+
+/// 启停：改 index.json 该行 enabled（前端硬刷新后生效）
+async fn plugins_toggle(Json(r): Json<PluginToggleReq>) -> Json<Api<serde_json::Value>> {
+    plugin_fs(move || plugin_store::toggle(&plugin_store::plugins_dir(), &r.name, r.enabled)).await
+}
+
+#[derive(Deserialize)]
+struct PluginReq {
+    name: String,
+}
+
+/// 删除：目录 + 登记一起摘（二次校验 name 白名单，confirm 由前端做）
+async fn plugins_remove(Json(r): Json<PluginReq>) -> Json<Api<serde_json::Value>> {
+    plugin_fs(move || plugin_store::remove(&plugin_store::plugins_dir(), &r.name)).await
 }

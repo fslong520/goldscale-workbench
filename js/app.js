@@ -16,12 +16,48 @@ async function fetchPluginURL(url, kind) {
   }
 }
 
+// 插件加载错误台账：设置页「插件管理」据此显示红 chip（stage + message）。
+// 只留下最终态——加载成功即清除该名记录；停用（enabled:false）不算错误，不记。
+function pluginFail(name, stage, message) {
+  if (!name) return;
+  window.__gsPluginErrors = window.__gsPluginErrors || {};
+  window.__gsPluginErrors[name] = {
+    stage: String(stage || 'load'),
+    message: String(message || '')
+  };
+}
+
+function pluginClear(name) {
+  if (name && window.__gsPluginErrors) delete window.__gsPluginErrors[name];
+}
+
+/** 加载期错误：带上 stage 上抛，由 loadPlugins 统一入台账（name/fetch/contract/exec/version） */
+function pluginErr(stage, message) {
+  const e = new Error(String(message || ''));
+  e.pluginStage = stage;
+  return e;
+}
+
+/** 版本比较：a<b 返 -1，a>b 返 1，相等返 0（各段按数字比，缺段补 0） */
+function cmpVersion(a, b) {
+  const seg = (s) => String(s).split('.').map((x) => parseInt(x, 10) || 0);
+  const pa = seg(a);
+  const pb = seg(b);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0;
+    const y = pb[i] || 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
 const App = {
   current: null,
   spotTimer: null,
   posTimer: null,
 
   async boot() {
+    window.__gsPluginErrors = window.__gsPluginErrors || {};
     // 导航
     const nav = document.getElementById('nav');
     U.clear(nav);
@@ -75,13 +111,33 @@ const App = {
     const list = Array.isArray(reg && reg.plugins) ? reg.plugins : [];
     if (!list.length) return;
 
+    // 产品版本（/api/health 的 version）：只用于 manifest.min_app 校验；拿不到就跳过校验
+    let appVer = '';
+    try {
+      const h = await API.health();
+      appVer = String((h && h.version) || '');
+      window.__gsAppVersion = appVer;
+    } catch (e) {
+      console.warn('[plugins] 产品版本读取失败，本次跳过 min_app 校验：', e.message);
+    }
+
     const ok = [];
     for (const item of list) {
+      const name = String((item && item.name) || '').trim();
+      // 停用：连 fetch 都不发（enabled 缺省视为启用，向后兼容）
+      if (item && item.enabled === false) {
+        pluginClear(name);
+        continue;
+      }
       try {
-        const page = await this.loadPlugin(item);   // 串行：单个抛错只丢自己
-        if (page) ok.push(page);
+        const page = await this.loadPlugin(item, appVer);   // 串行：单个抛错只丢自己
+        if (page) {
+          ok.push(page);
+          pluginClear(name);
+        }
       } catch (e) {
-        console.warn('[plugins] 加载失败，已跳过：' + ((item && item.name) || '(无名)'), e.message);
+        console.warn('[plugins] 加载失败，已跳过：' + (name || '(无名)'), e.message);
+        pluginFail(name, e.pluginStage || 'load', e.message);
       }
     }
     if (!ok.length) return;
@@ -99,34 +155,46 @@ const App = {
     console.log('[plugins] 已加载 ' + ok.length + ' 个：' + ok.map((p) => p.key).join(', '));
   },
 
-  async loadPlugin(item) {
+  async loadPlugin(item, appVer) {
     const name = String((item && item.name) || '').trim();
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) {
-      console.warn('[plugins] 非法插件名，已跳过：', name || '(空)');
-      return null;
+      throw pluginErr('name', '非法插件名：' + (name || '(空)'));
     }
 
-    const text = await fetchPluginURL(`plugins/${name}/index.js`, 'text');
-    // 防呆：非空且含 window.Pages，否则不执行
-    if (!text || !text.trim() || !text.includes('window.Pages')) {
-      console.warn(`[plugins] ${name}/index.js 不合契约（须导出 window.Pages），已跳过`);
-      return null;
-    }
-    new Function(text)();   // 内联执行：串行可控，语法/运行错在此抛出，被上层接住
-
-    const page = window.Pages && window.Pages[name];
-    if (!page || typeof page.render !== 'function') {
-      console.warn(`[plugins] ${name} 未注册 window.Pages.${name} 或缺少 render()，已跳过`);
-      return null;
-    }
-
-    // manifest 只用来核 title/order；缺失时回退注册表，再回退目录名
+    // 清单先行：min_app 高于本机版本就别 fetch、别执行（与其它异常一样只丢自己）
     let man = null;
     try {
       man = await fetchPluginURL(`plugins/${name}/manifest.json`, 'json');
     } catch (e) {
       console.warn(`[plugins] ${name}/manifest.json 读取失败，回退注册表信息：`, e.message);
     }
+    const need = man && typeof man.min_app === 'string' ? man.min_app.trim() : '';
+    if (need && appVer && cmpVersion(appVer, need) < 0) {
+      throw pluginErr('version', `需要金秤 v${need}，本机 v${appVer}`);
+    }
+
+    let text;
+    try {
+      text = await fetchPluginURL(`plugins/${name}/index.js`, 'text');
+    } catch (e) {
+      throw pluginErr('fetch', 'index.js 读取失败：' + e.message);
+    }
+    // 防呆：非空且含 window.Pages，否则不执行
+    if (!text || !text.trim() || !text.includes('window.Pages')) {
+      throw pluginErr('contract', 'index.js 不合契约（须导出 window.Pages）');
+    }
+    try {
+      new Function(text)();   // 内联执行：串行可控，语法/运行错在此抛出，被上层接住
+    } catch (e) {
+      throw pluginErr('exec', 'index.js 执行出错：' + ((e && e.message) || e));
+    }
+
+    const page = window.Pages && window.Pages[name];
+    if (!page || typeof page.render !== 'function') {
+      throw pluginErr('contract', `未注册 window.Pages.${name} 或缺少 render()`);
+    }
+
+    // manifest 只用来核 title/order；缺失时回退注册表，再回退目录名
     const order = [man && man.order, item && item.order]
       .map(Number).find((n) => Number.isFinite(n));
 

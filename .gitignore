@@ -20,3 +20,6 @@ __pycache__/
 # pi 的依赖树（package.json 声明入库即可）
 /agent/pi/node_modules/
 /artifacts/
+
+# Release 产物（build-release.sh 输出，绝不入库）
+/dist/
