@@ -1,9 +1,25 @@
 {
   "comment": "插件静态注册表：浏览器不能列目录，服务端也不扫 plugins/。新建插件请在此登记 {\"name\":\"<目录名>\",\"order\":<数字>}。app.js 启动时按此清单逐个加载 plugins/<name>/index.js。",
   "plugins": [
-    { "name": "overview", "order": 5 },
-    { "name": "hello", "order": 90 },
-    { "name": "gold-glance", "order": 100 },
-    { "name": "behavior-review", "order": 110 }
+    {
+      "name": "overview",
+      "order": 5
+    },
+    {
+      "name": "hello",
+      "order": 90
+    },
+    {
+      "name": "gold-glance",
+      "order": 100
+    },
+    {
+      "name": "price-alerts",
+      "order": 105
+    },
+    {
+      "name": "behavior-review",
+      "order": 110
+    }
   ]
 }

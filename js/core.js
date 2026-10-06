@@ -3,8 +3,13 @@
 const API_BASE = '';
 
 /* Agent 常驻宿主 goldscale-agentd（独立进程）：金秤重启不断它的会话，
-   金秤崩了它还负责把金秤拉起来。只有 /api/agent* 走这个绝对地址。 */
-const AGENT_BASE = 'http://127.0.0.1:8788';
+   金秤崩了它还负责把金秤拉起来。只有 /api/agent* 走这个绝对地址。
+   本机访问直连 127.0.0.1:8788；经公网入口（101.200.193.23:8789 nginx 分流）
+   访问时用相对路径同端口直达（nginx 把 /api/agent|event|coach|memory 分给 8788）。 */
+const AGENT_BASE =
+  location.hostname === '127.0.0.1' || location.hostname === 'localhost'
+    ? location.protocol + '//' + location.hostname + ':8788'
+    : '';
 
 const U = {
   /* ---------- 格式化 ---------- */

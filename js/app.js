@@ -104,9 +104,7 @@ const App = {
     this.posTimer = setInterval(() => {
       if (this.current === PagePositions) this.current.renderList?.();
     }, 10000);
-    // 到价提醒（js/alerts.js）：全局挂载，监听下面的 gs:spot 广播比对触发，跨页生效
-    try { window.Alerts?.init?.(); }
-    catch (e) { console.warn('[alerts] 初始化失败，已忽略：', e.message); }
+    // 到价提醒已迁为插件（plugins/price-alerts）：由插件自行监听下面的 gs:spot 广播，核心不再挂载
     // 教练动态（行为层）：顶栏「询问 AI」左侧的入口与下拉面板；挂不上也不影响启动
     try { window.Coach?.mount?.(); }
     catch (e) { console.warn('[coach] 入口挂载失败，已忽略：', e.message); }
@@ -252,7 +250,7 @@ const App = {
       State.spotState = sp.fresh ? 'live' : 'stale';
       State.lastSpot = sp.t;
       this.renderQuote();
-      // 广播最新现价：到价提醒（js/alerts.js）订阅 gs:spot 比对触发（仅成功路径）
+      // 广播最新现价：到价提醒插件（plugins/price-alerts）订阅 gs:spot 比对触发（仅成功路径）
       document.dispatchEvent(new CustomEvent('gs:spot', { detail: sp }));
     } catch (e) {
       State.spotState = 'err';

@@ -861,11 +861,8 @@ const PageWatch = {
     });
     const briefHost = U.el('div', {});
     const aiHost = U.el('div', {}, aiSel, briefHost);
-    // 到价提醒小组件：现价卡下方（提醒源与触发逻辑在 js/alerts.js，跨页生效）
-    const alertHost = U.el('div', {});
     const right = U.el('div', { style: 'display:flex;flex-direction:column;gap:11px' },
       U.card('现价', infoHost),
-      U.card('到价提醒', alertHost),
       aiHost,
       U.card('数据源', dataNote)
     );
@@ -873,12 +870,10 @@ const PageWatch = {
     page.appendChild(U.el('div', { class: 'g-main' }, head, right));
     view.appendChild(page);
 
-    this.hosts = { chartHost, subHost, infoHost, right, dataNote, aiHost, briefHost, alertHost };
+    this.hosts = { chartHost, subHost, infoHost, right, dataNote, aiHost, briefHost };
     this.syncDrawBtns();
     this.load(false);
     this.showAI();
-    try { window.Alerts?.renderWidget?.(alertHost); }
-    catch (e) { console.warn('[alerts] 小组件渲染失败，已忽略：', e.message); }
     // 基本分析自动轮询：每分钟检查一次，研判超 10 分钟且页面可见才重新生成
     if (this._aiTimer) clearInterval(this._aiTimer);
     this._aiTimer = setInterval(() => this._aiTick(), 60 * 1000);
